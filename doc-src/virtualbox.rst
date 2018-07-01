@@ -112,9 +112,186 @@ Possible next steps:
 
 .. _virtualbox_build:
 
-Build the appliance
-===================
 
+
+Build with Vagrant
+==================
+
+This procuedure will build and configure a guest machine automatically 
+using `Vagrant <https://www.vagrantup.com/docs/index.html>`_.
+Vagrant is a command line utility tool for building and
+managing virtual machine environments in a single workflow.
+
+Install Vagrant and download Vagrantfile
+----------------------------------------
+
+1.  `Download Vagrant <https://www.vagrantup.com/downloads.html>`_
+
+2.  Install Vagrant on your operating system. Confirm installation
+with :code:`vagrant version`:
+
+::
+
+    $ vagrant verrion
+    Installed Version: 2.1.2
+    Latest Version: 2.1.2
+    
+    You're running an up-to-date version of Vagrant
+
+3. Download charlieloud from the github `repository <https://github.com/hpc/charliecloud>`_
+into your :code:`/home` directory:
+
+::
+
+    $ git clone --recursive https://github.com/hpc/charliecloud.git ~/charliecloud
+
+Build your guest machine
+------------------------
+
+1. Step inside your `charliecloud/vagrant` directory:
+
+::
+
+    $ cd ~/charliecloud/vagrant
+
+2. If you are behind a proxy, rename :code:`Vagrantfile.proxy` to :code:`Vagrantfile`:
+
+::
+
+    $ mv Vagrantfile.proxy Vagrantfile
+
+.. note::
+
+	You will need to edit lines 24, 46, and 47 (marked with 
+	:code:`### EDIT ###` comments) in the :code:`Vagrantfile.proxy` with your site's
+	proxy address.
+
+
+Otherwise, rename :code:`Vagrantfile.noproxy` to :code:`Vagrantfile`  
+
+::
+
+    $ mv Vagrantfile.noproxy Vagrantfile
+
+
+3. Build the guest machine. This will take several minutes:
+
+::
+
+    $ vagrant up
+
+Your VirtualBox guest machine is now built and running. From here, you
+can ssh (from host terminal) into your machine.
+
+Use your guest machine
+------------------------
+
+SSH in and try Charliecloud
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+1. From within your :code:`~/charliecloud/vagrant` directory, SSH into the guest:
+
+::
+
+    $ vagrant ssh
+
+2. Switch to the *vagrant* user and run the proxy script to configure
+environment variables:
+
+::
+
+    $ sudo su vagrant
+    $ source /home/vagrant/env-vars.sh
+
+You are now ready to make all of your wildest Charliecloud dreams come
+true. 
+
+Possible next steps:
+
+  * Follow the :doc:`tutorial <tutorial>`.
+  * Run the :ref:`test suite <install_test-charliecloud>` in
+    :code:`/usr/share/doc/charliecloud/test`.
+
+.. note::
+
+	You may now :code:`suspend`, :code:`halt`, or save
+	a :code:`snapshot` of your guest machine at your leisure.
+
+Shutting down your virtual machine
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Vagrant's :code:`halt` command will shutdown your running virtual machine.
+Vagrant will first attempt to gracefully shutdown the machine by running
+the guest OS shutdown mechanism. If this fails, Vagrant will just shut
+down the machine.
+
+To shutdown your machine, use the :code:`halt` command:
+
+::
+
+    $ vagrant halt
+
+To relaunch your machine, use vagrant's :code:`up` command:
+
+::
+
+    $ vagrant up
+
+Suspending your virtual machine
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Vagrant's :code:`suspend` command effectively saves the exact point-in-time
+state of the mahine so that when you :code:`resume` it later, it will
+return running immediately from that point.
+
+To suspend your machine, use the :code:`suspend` command:
+
+::
+
+    $ vagrant suspend
+
+To resume running your machine, use the :code:`resume` command:
+
+::
+
+    $ vagrant resume
+
+Snapshotting your virtual machine
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Snapshots record a point-in-time state of a guest machine. You can
+then quickly restore to this environment. This lets you experiment
+and try things and quickly restore back to a previous state.
+
+To snapshot your current state, use the :code:`snapshot save` command:
+
+::
+
+    $ vagrant snapshot save [vm-name] $NAME
+
+To restore your snapshot, use the :code:`snapshot restore` command:
+
+::
+
+    $ vagrant snapshot restore [vm-name] $NAME
+
+Destroying your guest machine
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This command stops the running machine Vagrant is managing and
+destroys all resources that were created during the machine creation
+process. After running this command, your computer should be left at
+a clean state, as if you never created the guest machine in the first place.
+
+To destroy your machine, use the*:code:`destroy` command:
+
+::
+
+    $ vagrant destroy
+
+
+Manually build the appliance
+============================
 
 Initialize VM
 -------------
