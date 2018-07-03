@@ -1,0 +1,130 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+##
+# This file builds a VirtualBox Centos 7 guest OS environment with 
+# Charliecloud, Docker, and OpenMPI.
+##
+
+# Require the proxy configurator plugin
+if !Vagrant.has_plugin?("vagrant-proxyconf")
+  raise("vagrant-proxyconf plugin is required; run 'vagrant plugin install vagrant-proxyconf'");
+end
+
+# Require the vagrant reload plugin
+if !Vagrant.has_plugin?("vagrant-reload")
+  raise("vagrant-reload plugin is required; run 'vagrant plugin install vagrant-reload'");
+end
+
+# Get proxy environment variables
+unless ENV['http_proxy'].nil?
+    proxy = ENV.fetch('http_proxy')
+    url = '.' + URI.parse(proxy).host.downcase
+end
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+Vagrant.require_version ">= 2.0.0"
+Vagrant.configure("2") do |config|
+
+    if proxy == ""
+        config.git_proxy.http = ""
+        config.proxy.ftp = ""
+        config.proxy.http = ""
+        config.proxy.https = ""
+        config.proxy.no_proxy = ""
+    else
+        config.git_proxy.http = "#{proxy}"
+        config.proxy.ftp = "#{proxy}"
+        config.proxy.http = "#{proxy}"
+        config.proxy.https = "#{proxy}"
+        config.proxy.no_proxy = "localhost,127.0.0.1,#{url}"
+    end 
+
+    # Every Vagrant development environment requires a box. You can search for
+    # boxes at https://vagrantcloud.com/search.
+    config.vm.box = "centos/7"
+    config.vm.hostname = "Charliecloud"
+    
+    # Disable automatic box update checking. If you disable this, then
+    # boxes will only be checked for updates when the user runs
+    # `vagrant box outdated`. This is not recommended.
+    config.vm.box_check_update = false
+
+    # Create a forwarded port mapping which allows access to a specific port
+    # within the machine from a port on the host machine. In the example below,
+    # accessing "localhost:8080" will access port 80 on the guest machine.
+    # NOTE: This will enable public access to the opened port
+    # config.vm.network "forwarded_port", guest: 80, host: 8080
+
+    # Create a forwarded port mapping which allows access to a specific port
+    # within the machine from a port on the host machine and only allow access
+    # via 127.0.0.1 to disable public access
+    config.vm.network "forwarded_port", guest: 20, host: 2020, host_ip: "127.0.0.1"
+
+    # Create a private network, which allows host-only access to the machine
+    # using a specific IP.
+    # config.vm.network "private_network", ip: "192.168.61.2"
+
+    # Create a public network, which generally matched to bridged network.
+    # Bridged networks make the machine appear as another physical device on
+    # your network.
+    # config.vm.network "public_network"
+    
+    config.vm.provider "virtualbox" do |vb|
+        vb.name = "Charliecloud-VM"
+        vb.gui = false
+        vb.memory = "4000"
+        vb.cpus = "4"
+    end
+    
+    config.vm.provision "bootstrap", type: "shell", privileged: true, inline: <<-SHELL
+        yum makecache fast
+        yum-config-manager --setopt=deltarpm=0 --save
+        yum -y upgrade
+        yum -y install git gcc gcc-c++ make binutils yum-utils device-mapper-persistent-data lvm2 screen wget curl
+        yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+        yum -y install docker-ce.x86_64
+        systemctl enable docker && systemctl start docker
+
+        # Enabe proxy settings for the docker systemd service file
+        mkdir /etc/systemd/system/docker.service.d/
+        echo "[Service]" >> /etc/systemd/system/docker.service.d/http-proxy.conf
+        echo "Environment=\"HTTP_PROXY=$http_proxy\"" >> /etc/systemd/system/docker.service.d/http-proxy.conf
+        echo "Environment=\"HTTPS_PROXY=$http_proxy\"" >> /etc/systemd/system/docker.service.d/http-proxy.conf
+        systemctl daemon-reload
+        systemctl restart docker
+        
+        # Install OpenMPI
+        export VERSION=2.1.3
+        cd /usr/local/src
+        wget https://www.open-mpi.org/software/ompi/v2.1/downloads/openmpi-${VERSION}.tar.gz
+        tar xf openmpi-${VERSION}.tar.gz
+        rm openmpi-${VERSION}.tar.gz
+        cd openmpi-${VERSION}/
+        ./configure --prefix=/usr/local/ --disable-mpi-cxx --disable-mpi-fortran
+        make -j$(getconf _NPROCESSORS_ONLN)
+        make install
+        make clean
+
+        echo 1885 > /proc/sys/user/max_user_namespaces
+        echo "user.max_user_namespaces = 32767" > /etc/sysctl.d/51-userns.conf
+        fgrep -q unpriv_enable /proc/cmdline \
+            || grubby --args="user_namespace.enable=1 namespace.unpriv_enable=1 user.max_user_namespaces=32767" --update-kernel=ALL
+    SHELL
+
+    config.vm.provision :reload
+
+    config.vm.provision "shell", privileged: false, 
+        env: {"CH_TEST_TARDIR"=>"/var/tmp/tar",
+            "CH_TEST_IMGDIR"=>"/var/tmp/img",
+            "CH_TEST_PERMDIRS"=>"/var/tmp"}, 
+        inline: <<-SHELL
+
+        # Install Charliecloud
+        git clone --recursive https://github.com/hpc/charliecloud.git ~/charliecloud
+        cd ~/charliecloud && make && sudo make install PREFIX=/usr/local
+        cd ~/charliecloud/test
+        make test-build && make test-run && make test-test
+    SHELL
+end
